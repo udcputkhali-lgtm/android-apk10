@@ -1,0 +1,65 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # এখানে gradle-version 8.5 সরাসরি ইনস্টল করা হচ্ছে
+      - name: Set up Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Build APK with Gradle
+        run: |
+          set -e
+          echo "Current directory: $(pwd)"
+
+          # যদি কোনো সাব-ফোল্ডারে প্রজেক্ট থাকে, স্বয়ংক্রিয়ভাবে রুট খুঁজে নেওয়া
+          if [ ! -f "settings.gradle" ] && [ ! -f "build.gradle" ]; then
+            TARGET_DIR=$(find . -maxdepth 3 -name "settings.gradle" -exec dirname {} \; | head -n 1)
+            if [ -n "$TARGET_DIR" ]; then
+              echo "Moving to project folder: $TARGET_DIR"
+              cd "$TARGET_DIR"
+            fi
+          fi
+
+          echo "Directory listing:"
+          ls -la
+
+          # যদি gradlew থাকে তবে তা দিয়ে, না থাকলে সরাসরি ইনস্টল করা gradle দিয়ে বিল্ড হবে
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug --stacktrace --no-daemon
+          else
+            gradle assembleDebug --stacktrace --no-daemon
+          fi
+
+          echo "APK build completed successfully!"
+          find . -name "*.apk" -ls
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: udc-sms-assistant-debug-apk
+          path: |
+            **/build/outputs/apk/debug/*.apk
+            **/build/outputs/apk/**/*.apk
+          retention-days: 14
